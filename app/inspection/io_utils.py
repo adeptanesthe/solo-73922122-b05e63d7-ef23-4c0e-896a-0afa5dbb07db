@@ -43,6 +43,36 @@ def decode_gray_png(data: bytes) -> np.ndarray:
     return img
 
 
+def decode_label_png(data: bytes) -> np.ndarray:
+    """Decode an uploaded golden-coordinate label mask.
+
+    The mask is a single-channel 512x512 PNG whose pixels are restricted to
+    the label values 0 (background), 1 and 2 (the two copper nets).
+    """
+    if not isinstance(data, (bytes, bytearray)) or len(data) == 0:
+        raise ImageValidationError("empty label upload")
+    buffer = np.frombuffer(bytes(data), dtype=np.uint8)
+    img = cv2.imdecode(buffer, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        raise ImageValidationError("label file is not a decodable image")
+    if img.ndim == 3:
+        if img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
+        elif img.shape[2] == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            raise ImageValidationError("unsupported label channel count")
+    if img.ndim != 2:
+        raise ImageValidationError("label mask must be single-channel")
+    if img.shape != (IMAGE_SIZE, IMAGE_SIZE):
+        raise ImageValidationError(
+            f"label mask must be {IMAGE_SIZE}x{IMAGE_SIZE}, got {img.shape}"
+        )
+    if img.dtype != np.uint8:
+        img = np.clip(img, 0, 255).astype(np.uint8)
+    return img
+
+
 def encode_png(img: np.ndarray) -> bytes:
     ok, buf = cv2.imencode(".png", img)
     if not ok:
